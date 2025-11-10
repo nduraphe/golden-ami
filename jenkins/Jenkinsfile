@@ -7,7 +7,6 @@ pipeline {
         string(name: 'BASE_AMI', defaultValue: 'ami-043cc489b5239c3de', description: 'Base Windows AMI ID')
         string(name: 'SHARE_ACCOUNTS', defaultValue: '284495578504', description: 'Comma-separated AWS Account IDs to share this AMI with')
         string(name: 'S3_BUCKET', defaultValue: 'golden-ami-softwares-nagesh', description: 'S3 bucket containing software installers')
-        string(name: 'SOFTWARE_KEY', defaultValue: 'VSCodeUserSetup-x64-1.93.1.exe', description: 'S3 key of the software installer to download')
         string(name: 'INSTALL_SCRIPT_NAME', defaultValue: 'install_vscode.ps1', description: 'Script name under packer/scripts/ to run inside AMI build')
     }
 
@@ -23,19 +22,33 @@ pipeline {
 
     stages {
 
-        stage('Prepare Workspace') {
+        stage('Checkout Repository') {
             steps {
                 cleanWs()
-                script {
-                    echo "📁 Ensuring required directories..."
-                    sh 'mkdir -p packer/scripts'
+                checkout scm
+                sh 'ls -R || true'
+            }
+        }
 
+        stage('Prepare Workspace') {
+            steps {
+                script {
+                    echo "📁 Checking required install script..."
                     def scriptPath = "packer/scripts/${params.INSTALL_SCRIPT_NAME}"
+
                     if (!fileExists(scriptPath)) {
-                        error "❌ Install script not found: ${scriptPath}. Please check the file name or commit it to the repo."
+                        error "❌ Install script not found: ${scriptPath}. Please ensure the file is committed to the repo."
                     } else {
                         echo "✅ Found install script: ${scriptPath}"
                     }
+
+                    // Dynamically infer SOFTWARE_KEY based on script name
+                    env.SOFTWARE_KEY = params.INSTALL_SCRIPT_NAME
+                        .replaceAll(/^install_/, '')        // remove install_ prefix
+                        .replaceAll(/\.ps1$/, '')           // remove .ps1 extension
+                        .toUpperCase() + ".exe"
+
+                    echo "💡 Using SOFTWARE_KEY derived from script: ${env.SOFTWARE_KEY}"
                 }
             }
         }
@@ -43,11 +56,14 @@ pipeline {
         stage('Download Software from S3') {
             steps {
                 script {
-                    echo "⬇️ Downloading software ${params.SOFTWARE_KEY} from S3 bucket ${params.S3_BUCKET}..."
+                    echo "⬇️ Downloading software ${env.SOFTWARE_KEY} from S3 bucket ${params.S3_BUCKET}..."
                     withAWS(credentials: 'd7da5a8a-1ac3-4fe3-b819-9da2b3469db7', region: "${AWS_DEFAULT_REGION}") {
                         sh """
-                            aws s3 cp s3://${params.S3_BUCKET}/${params.SOFTWARE_KEY} packer/scripts/
-                            echo "✅ Downloaded ${params.SOFTWARE_KEY} to packer/scripts/"
+                            aws s3 cp s3://${params.S3_BUCKET}/${env.SOFTWARE_KEY} packer/scripts/ || {
+                                echo "❌ Failed to download ${env.SOFTWARE_KEY} from ${params.S3_BUCKET}";
+                                exit 1;
+                            }
+                            echo "✅ Downloaded ${env.SOFTWARE_KEY} to packer/scripts/"
                         """
                     }
                 }
@@ -77,7 +93,7 @@ pipeline {
                               -var 'base_ami=${params.BASE_AMI}' \
                               -var 'aws_account_id=${params.AWS_ACCOUNT_ID}' \
                               -var 's3_software_bucket=${params.S3_BUCKET}' \
-                              -var 'software_key=${params.SOFTWARE_KEY}' \
+                              -var 'software_key=${env.SOFTWARE_KEY}' \
                               -var 'install_script=packer/scripts/${params.INSTALL_SCRIPT_NAME}' \
                               -machine-readable packer/golden_ami_template.json | tee packer_build.log
                         """
