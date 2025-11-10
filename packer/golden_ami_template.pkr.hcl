@@ -21,8 +21,7 @@ source "amazon-ebs" "windows" {
   iam_instance_profile        = "PackerBuildProfile"
   ami_name                    = "{{clean_resource_name `{{user `ami_name`}}`}}"
   associate_public_ip_address = true
-  communicator            = "ssm"               # <--- Use SSM communicator
-  ssm_username            = "Administrator"   # Optional, default is Administrator
+  communicator            = "ssm"        
   winrm_timeout               = "20m"
   ami_description             = "Golden AMI built via Jenkins + Packer"
 
