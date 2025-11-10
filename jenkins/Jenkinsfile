@@ -3,7 +3,7 @@ pipeline {
 
     parameters {
         string(name: 'INSTANCE_TYPE', defaultValue: 't3.micro', description: 'EC2 Instance Type')
-        string(name: 'BASE_AMI', defaultValue: 'ami-043cc489b5239c3de', description: 'Base Windows AMI ID')
+        string(name: 'BASE_AMI', defaultValue: 'ami-0222331ecd1b7e353', description: 'Base Windows AMI ID')
         string(name: 'SHARE_ACCOUNTS', defaultValue: '284495578504', description: 'Comma-separated AWS Account IDs to share this AMI with')
         string(name: 'S3_BUCKET', defaultValue: 'golden-ami-softwares-nagesh', description: 'S3 bucket containing software installers')
         string(name: 'INSTALL_SCRIPT_NAME', defaultValue: 'install_vscode.ps1', description: 'Script name under packer/scripts/ to run inside AMI build')
