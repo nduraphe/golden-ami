@@ -62,7 +62,7 @@ pipeline {
                     echo "🚀 Starting Packer build for Windows Golden AMI..."
                     withAWS(credentials: 'd7da5a8a-1ac3-4fe3-b819-9da2b3469db7', region: "${AWS_DEFAULT_REGION}") {
                         retry(2) { // Retry Packer build twice if it fails
-                            sh """
+                            sh '''
                                 AMI_NAME="Golden_AMI_Windows_$(date +%Y%m%d_%H%M%S)"
                                 packer init packer/golden_ami_template.pkr.hcl
                                 packer build \
@@ -73,7 +73,7 @@ pipeline {
                                   -var 'install_script=packer/scripts/${params.INSTALL_SCRIPT_NAME}' \
                                   -var 'ami_name=${AMI_NAME}' \
                                   -machine-readable packer/golden_ami_template.pkr.hcl | tee packer_build.log
-                            """
+                            '''
                         }
                     }
                 }
@@ -108,12 +108,12 @@ pipeline {
                         for (acc in accounts) {
                             def trimmed = acc.trim()
                             echo "🔗 Sharing AMI ${env.AMI_ID} with account: ${trimmed}"
-                            sh """
+                            sh '''
                                 aws ec2 modify-image-attribute \
                                     --image-id ${env.AMI_ID} \
                                     --launch-permission "Add=[{UserId=${trimmed}}]" \
                                     --region ${AWS_DEFAULT_REGION}
-                            """
+                            '''
                         }
                     }
                 }
