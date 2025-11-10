@@ -39,6 +39,6 @@ build {
   sources = ["source.amazon-ebs.windows"]
 
   provisioner "powershell" {
-    scripts = [var.install_script]
+    scripts = ["packer/scripts/install_vscode.ps1"]
   }
 }
