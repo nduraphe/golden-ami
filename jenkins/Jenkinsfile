@@ -30,11 +30,11 @@ pipeline {
             }
         }
 
-        stage('Prepare Workspace') {
+        stage('Validate Install Script') {
             steps {
                 script {
-                    echo "📁 Checking required install script..."
                     def scriptPath = "packer/scripts/${params.INSTALL_SCRIPT_NAME}"
+                    echo "📁 Checking required install script: ${scriptPath}"
 
                     if (!fileExists(scriptPath)) {
                         error "❌ Install script not found: ${scriptPath}. Please ensure the file is committed to the repo."
@@ -42,40 +42,7 @@ pipeline {
                         echo "✅ Found install script: ${scriptPath}"
                     }
 
-                    // Dynamically infer SOFTWARE_KEY based on script name
-                    env.SOFTWARE_KEY = params.INSTALL_SCRIPT_NAME
-                        .replaceAll(/^install_/, '')        // remove install_ prefix
-                        .replaceAll(/\.ps1$/, '')           // remove .ps1 extension
-                        .toUpperCase() + ".exe"
-
-                    echo "💡 Using SOFTWARE_KEY derived from script: ${env.SOFTWARE_KEY}"
-                }
-            }
-        }
-
-        stage('Download Software from S3') {
-            steps {
-                script {
-                    echo "⬇️ Downloading software ${env.SOFTWARE_KEY} from S3 bucket ${params.S3_BUCKET}..."
-                    withAWS(credentials: 'd7da5a8a-1ac3-4fe3-b819-9da2b3469db7', region: "${AWS_DEFAULT_REGION}") {
-                        sh """
-                            aws s3 cp s3://${params.S3_BUCKET}/${env.SOFTWARE_KEY} packer/scripts/ || {
-                                echo "❌ Failed to download ${env.SOFTWARE_KEY} from ${params.S3_BUCKET}";
-                                exit 1;
-                            }
-                            echo "✅ Downloaded ${env.SOFTWARE_KEY} to packer/scripts/"
-                        """
-                    }
-                }
-            }
-        }
-
-        stage('Validate Install Script') {
-            steps {
-                script {
-                    echo "🔍 Validating selected install script..."
-                    sh 'ls -lh packer/scripts/'
-                    sh "head -n 10 packer/scripts/${params.INSTALL_SCRIPT_NAME} || true"
+                    sh "head -n 10 ${scriptPath} || true"
                 }
             }
         }
@@ -93,7 +60,6 @@ pipeline {
                               -var 'base_ami=${params.BASE_AMI}' \
                               -var 'aws_account_id=${params.AWS_ACCOUNT_ID}' \
                               -var 's3_software_bucket=${params.S3_BUCKET}' \
-                              -var 'software_key=${env.SOFTWARE_KEY}' \
                               -var 'install_script=packer/scripts/${params.INSTALL_SCRIPT_NAME}' \
                               -machine-readable packer/golden_ami_template.json | tee packer_build.log
                         """
