@@ -29,19 +29,29 @@ pipeline {
             }
         }
 
-        stage('Validate Install Script') {
+        stage('Validate Parameters & Install Script') {
             steps {
                 script {
-                    def scriptPath = "packer/scripts/${params.INSTALL_SCRIPT_NAME}"
-                    echo "📁 Checking required install script: ${scriptPath}"
-
-                    if (!fileExists(scriptPath)) {
-                        error "❌ Install script not found: ${scriptPath}. Please ensure the file is committed to the repo."
-                    } else {
-                        echo "✅ Found install script: ${scriptPath}"
+                    // Validate BASE_AMI
+                    if (!params.BASE_AMI.startsWith('ami-')) {
+                        error "❌ Invalid BASE_AMI: ${params.BASE_AMI}"
                     }
 
-                    sh "head -n 10 ${scriptPath} || true"
+                    // Validate INSTANCE_TYPE
+                    def validInstanceTypes = ['t3.micro','t3.small','t3.medium','t3.large']
+                    if (!validInstanceTypes.contains(params.INSTANCE_TYPE)) {
+                        error "❌ Invalid INSTANCE_TYPE: ${params.INSTANCE_TYPE}. Choose from ${validInstanceTypes}"
+                    }
+
+                    // Validate install script
+                    def scriptPath = "packer/scripts/${params.INSTALL_SCRIPT_NAME}"
+                    echo "📁 Checking required install script: ${scriptPath}"
+                    if (!fileExists(scriptPath)) {
+                        error "❌ Install script not found: ${scriptPath}. Ensure it is committed to the repo."
+                    } else {
+                        echo "✅ Found install script: ${scriptPath}"
+                        sh "head -n 10 ${scriptPath} || true"
+                    }
                 }
             }
         }
@@ -51,16 +61,20 @@ pipeline {
                 script {
                     echo "🚀 Starting Packer build for Windows Golden AMI..."
                     withAWS(credentials: 'd7da5a8a-1ac3-4fe3-b819-9da2b3469db7', region: "${AWS_DEFAULT_REGION}") {
-                        sh """
-                            packer init packer/golden_ami_template.pkr.hcl
-                            packer build \
-                              -var 'aws_region=${AWS_DEFAULT_REGION}' \
-                              -var 'instance_type=${params.INSTANCE_TYPE}' \
-                              -var 'base_ami=${params.BASE_AMI}' \
-                              -var 's3_software_bucket=${params.S3_BUCKET}' \
-                              -var 'install_script=packer/scripts/${params.INSTALL_SCRIPT_NAME}' \
-                              -machine-readable packer/golden_ami_template.pkr.hcl | tee packer_build.log
-                        """
+                        retry(2) { // Retry Packer build twice if it fails
+                            sh """
+                                AMI_NAME="Golden_AMI_Windows_$(date +%Y%m%d_%H%M%S)"
+                                packer init packer/golden_ami_template.pkr.hcl
+                                packer build \
+                                  -var 'aws_region=${AWS_DEFAULT_REGION}' \
+                                  -var 'instance_type=${params.INSTANCE_TYPE}' \
+                                  -var 'base_ami=${params.BASE_AMI}' \
+                                  -var 's3_software_bucket=${params.S3_BUCKET}' \
+                                  -var 'install_script=packer/scripts/${params.INSTALL_SCRIPT_NAME}' \
+                                  -var 'ami_name=${AMI_NAME}' \
+                                  -machine-readable packer/golden_ami_template.pkr.hcl | tee packer_build.log
+                            """
+                        }
                     }
                 }
             }

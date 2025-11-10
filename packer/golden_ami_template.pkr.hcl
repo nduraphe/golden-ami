@@ -12,17 +12,25 @@ variable "instance_type" {}
 variable "base_ami" {}
 variable "s3_software_bucket" {}
 variable "install_script" {}
+variable "ami_name" {}
 
 source "amazon-ebs" "windows" {
-  region                  = var.aws_region
-  source_ami              = var.base_ami
-  instance_type           = var.instance_type
-  iam_instance_profile    = "PackerBuildProfile"
-  ami_name                = "Golden_AMI_Windows_2025-11-10"
+  region                      = var.aws_region
+  source_ami                  = var.base_ami
+  instance_type               = var.instance_type
+  iam_instance_profile        = "PackerBuildProfile"
+  ami_name                    = "{{clean_resource_name `{{user `ami_name`}}`}}"
   associate_public_ip_address = true
-  communicator            = "winrm"
-  winrm_username          = "Administrator"
-  ami_description         = "Golden AMI built via Jenkins + Packer"
+  communicator            = "ssm"               # <--- Use SSM communicator
+  ssm_username            = "Administrator"   # Optional, default is Administrator
+  winrm_timeout               = "20m"
+  ami_description             = "Golden AMI built via Jenkins + Packer"
+
+  tags = {
+    Name      = "Golden_AMI_Windows"
+    CreatedBy = "Jenkins"
+    BuildDate = "{{timestamp}}"
+  }
 }
 
 build {
