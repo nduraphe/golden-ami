@@ -1,0 +1,28 @@
+{
+  "variables": {
+    "aws_region": "",
+    "instance_type": "",
+    "base_ami": "",
+    "s3_software_bucket": "",
+    "install_script": ""
+  },
+  "builders": [{
+    "type": "amazon-ebs",
+    "region": "{{user `aws_region`}}",
+    "source_ami": "{{user `base_ami`}}",
+    "instance_type": "{{user `instance_type`}}",
+    "ami_name": "golden-{{timestamp}}",
+    "associate_public_ip_address": true,
+    "communicator": "winrm",
+    "winrm_username": "Administrator",
+    "ami_description": "Golden AMI built via Jenkins + Packer"
+  }],
+  "provisioners": [
+    {
+      "type": "powershell",
+      "scripts": [
+        "{{user `install_script`}}"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,71 @@
+pipeline {
+    agent any
+
+    parameters {
+        string(name: 'AWS_ACCOUNT_ID', description: 'Target AWS Account ID')
+        string(name: 'INSTANCE_TYPE', defaultValue: 't3.medium', description: 'EC2 Instance Type')
+        string(name: 'BASE_AMI', description: 'Base AMI ID')
+        string(name: 'SHARE_ACCOUNTS', description: 'Comma-separated AWS Account IDs to share with')
+        string(name: 'S3_BUCKET', description: 'S3 bucket name where software installers are stored')
+        file(name: 'INSTALL_SCRIPT', description: 'Upload your software install script (.ps1 or .sh)')
+    }
+
+    environment {
+        AWS_DEFAULT_REGION = 'us-west-2'
+        PACKER_LOG = '1'
+    }
+
+    options {
+        ansiColor('xterm')
+        timestamps()
+    }
+
+    stages {
+        stage('Prepare Environment') {
+            steps {
+                cleanWs()
+                script {
+                    echo "Saving uploaded install script..."
+                    sh 'mkdir -p packer/scripts'
+                    writeFile file: 'packer/scripts/install_user.ps1', text: INSTALL_SCRIPT.readToString()
+                }
+            }
+        }
+
+        stage('Packer Build') {
+            steps {
+                withAWS(credentials: 'aws-jenkins-cred', region: "${AWS_DEFAULT_REGION}") {
+                    sh """
+                    packer build \
+                      -var 'aws_region=${AWS_DEFAULT_REGION}' \
+                      -var 'instance_type=${params.INSTANCE_TYPE}' \
+                      -var 'base_ami=${params.BASE_AMI}' \
+                      -var 's3_software_bucket=${params.S3_BUCKET}' \
+                      -var 'install_script=packer/scripts/install_user.ps1' \
+                      packer/golden_ami_template.json
+                    """
+                }
+            }
+        }
+
+        stage('Share AMI') {
+            steps {
+                script {
+                    echo "Sharing AMI with given accounts..."
+                    def accounts = params.SHARE_ACCOUNTS.split(',')
+                    def ami_id = sh(script: "jq -r '.builds[-1].artifact_id' packer_manifest.json | cut -d: -f2", returnStdout: true).trim()
+                    for (acc in accounts) {
+                        sh "aws ec2 modify-image-attribute --image-id ${ami_id} --launch-permission Add=[{UserId=${acc.trim()}}]"
+                    }
+                    echo "AMI shared successfully!"
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            cleanWs()
+        }
+    }
+}
