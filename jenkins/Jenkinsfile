@@ -2,7 +2,6 @@ pipeline {
     agent any
 
     parameters {
-        string(name: 'AWS_ACCOUNT_ID', defaultValue: '284495578504', description: 'Target AWS Account ID')
         string(name: 'INSTANCE_TYPE', defaultValue: 't3.micro', description: 'EC2 Instance Type')
         string(name: 'BASE_AMI', defaultValue: 'ami-043cc489b5239c3de', description: 'Base Windows AMI ID')
         string(name: 'SHARE_ACCOUNTS', defaultValue: '284495578504', description: 'Comma-separated AWS Account IDs to share this AMI with')
@@ -58,7 +57,6 @@ pipeline {
                               -var 'aws_region=${AWS_DEFAULT_REGION}' \
                               -var 'instance_type=${params.INSTANCE_TYPE}' \
                               -var 'base_ami=${params.BASE_AMI}' \
-                              -var 'aws_account_id=${params.AWS_ACCOUNT_ID}' \
                               -var 's3_software_bucket=${params.S3_BUCKET}' \
                               -var 'install_script=packer/scripts/${params.INSTALL_SCRIPT_NAME}' \
                               -machine-readable packer/golden_ami_template.pkr.hcl | tee packer_build.log
@@ -72,16 +70,22 @@ pipeline {
             steps {
                 script {
                     echo "🧾 Extracting AMI ID from Packer output..."
-                    sh "grep 'artifact,0,id' packer_build.log | tail -1 | cut -d, -f6 | cut -d: -f2 > ami_id.txt"
-                    env.AMI_ID = readFile('ami_id.txt').trim()
+                    def amiId = sh(script: "grep 'artifact,0,id' packer_build.log | tail -1 | cut -d, -f6", returnStdout: true).trim()
+
+                    if (!amiId) {
+                        error "❌ AMI creation failed or AMI ID not found in Packer output."
+                    }
+
+                    env.AMI_ID = amiId
                     echo "✅ AMI created successfully: ${env.AMI_ID}"
+                    writeFile file: 'ami_id.txt', text: env.AMI_ID
                 }
             }
         }
 
         stage('Share AMI with other AWS accounts') {
             when {
-                expression { return params.SHARE_ACCOUNTS?.trim() }
+                expression { return params.SHARE_ACCOUNTS?.trim() && env.AMI_ID }
             }
             steps {
                 script {
