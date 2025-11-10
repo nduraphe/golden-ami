@@ -28,7 +28,10 @@ pipeline {
                     echo "Creating required directories..."
                     sh 'mkdir -p packer/scripts'
                     echo "Saving uploaded install script..."
-                    writeFile file: 'packer/scripts/install_user.ps1', text: INSTALL_SCRIPT.readToString()
+
+                    // The uploaded file is placed in the workspace with the same name as the parameter
+                    // Copy or rename it for Packer usage
+                    sh "cp '${params.INSTALL_SCRIPT}' packer/scripts/install_user.ps1"
                 }
             }
         }
@@ -37,6 +40,7 @@ pipeline {
             steps {
                 script {
                     echo "Verifying install script..."
+                    sh 'ls -l packer/scripts/'
                     sh 'head -n 5 packer/scripts/install_user.ps1 || true'
                 }
             }
