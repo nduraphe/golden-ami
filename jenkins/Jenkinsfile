@@ -4,10 +4,10 @@ pipeline {
     parameters {
         string(name: 'AWS_ACCOUNT_ID', description: 'Target AWS Account ID')
         string(name: 'INSTANCE_TYPE', defaultValue: 't3.medium', description: 'EC2 Instance Type')
-        string(name: 'BASE_AMI', description: 'Base AMI ID')
-        string(name: 'SHARE_ACCOUNTS', description: 'Comma-separated AWS Account IDs to share with')
-        string(name: 'S3_BUCKET', description: 'S3 bucket name where software installers are stored')
-        file(name: 'INSTALL_SCRIPT', description: 'Upload your software install script (.ps1 or .sh)')
+        string(name: 'BASE_AMI', description: 'Base Windows AMI ID')
+        string(name: 'SHARE_ACCOUNTS', description: 'Comma-separated AWS Account IDs to share this AMI with')
+        string(name: 'S3_BUCKET', defaultValue: 'golden-ami-softwares-nagesh', description: 'S3 bucket containing software installers')
+        file(name: 'INSTALL_SCRIPT', description: 'Upload your PowerShell install script (.ps1)')
     }
 
     environment {
@@ -21,43 +21,75 @@ pipeline {
     }
 
     stages {
-        stage('Prepare Environment') {
+        stage('Prepare Workspace') {
             steps {
                 cleanWs()
                 script {
-                    echo "Saving uploaded install script..."
+                    echo "Creating required directories..."
                     sh 'mkdir -p packer/scripts'
+                    echo "Saving uploaded install script..."
                     writeFile file: 'packer/scripts/install_user.ps1', text: INSTALL_SCRIPT.readToString()
                 }
             }
         }
 
-        stage('Packer Build') {
+        stage('Validate Install Script') {
             steps {
-                withAWS(credentials: 'aws-jenkins-cred', region: "${AWS_DEFAULT_REGION}") {
-                    sh """
-                    packer build \
-                      -var 'aws_region=${AWS_DEFAULT_REGION}' \
-                      -var 'instance_type=${params.INSTANCE_TYPE}' \
-                      -var 'base_ami=${params.BASE_AMI}' \
-                      -var 's3_software_bucket=${params.S3_BUCKET}' \
-                      -var 'install_script=packer/scripts/install_user.ps1' \
-                      packer/golden_ami_template.json
-                    """
+                script {
+                    echo "Verifying install script..."
+                    sh 'head -n 5 packer/scripts/install_user.ps1 || true'
                 }
             }
         }
 
-        stage('Share AMI') {
+        stage('Build Golden Windows AMI with Packer') {
             steps {
                 script {
-                    echo "Sharing AMI with given accounts..."
-                    def accounts = params.SHARE_ACCOUNTS.split(',')
-                    def ami_id = sh(script: "jq -r '.builds[-1].artifact_id' packer_manifest.json | cut -d: -f2", returnStdout: true).trim()
-                    for (acc in accounts) {
-                        sh "aws ec2 modify-image-attribute --image-id ${ami_id} --launch-permission Add=[{UserId=${acc.trim()}}]"
+                    echo "Starting Packer build process..."
+                    withAWS(credentials: 'd7da5a8a-1ac3-4fe3-b819-9da2b3469db7', region: "${AWS_DEFAULT_REGION}") {
+                        sh """
+                        packer build \
+                          -var 'aws_region=${AWS_DEFAULT_REGION}' \
+                          -var 'instance_type=${params.INSTANCE_TYPE}' \
+                          -var 'base_ami=${params.BASE_AMI}' \
+                          -var 's3_software_bucket=${params.S3_BUCKET}' \
+                          -var 'install_script=packer/scripts/install_user.ps1' \
+                          -machine-readable packer/golden_ami_template.json | tee packer_build.log
+                        """
                     }
-                    echo "AMI shared successfully!"
+                }
+            }
+        }
+
+        stage('Extract AMI ID') {
+            steps {
+                script {
+                    echo "Extracting AMI ID from Packer output..."
+                    sh "grep 'artifact,0,id' packer_build.log | tail -1 | cut -d, -f6 | cut -d: -f2 > ami_id.txt"
+                    env.AMI_ID = readFile('ami_id.txt').trim()
+                    echo "Generated AMI ID: ${env.AMI_ID}"
+                }
+            }
+        }
+
+        stage('Share AMI with other AWS accounts') {
+            when {
+                expression { return params.SHARE_ACCOUNTS?.trim() }
+            }
+            steps {
+                script {
+                    withAWS(credentials: 'd7da5a8a-1ac3-4fe3-b819-9da2b3469db7', region: "${AWS_DEFAULT_REGION}") {
+                        def accounts = params.SHARE_ACCOUNTS.split(',')
+                        for (acc in accounts) {
+                            def trimmed = acc.trim()
+                            echo "Sharing AMI ${env.AMI_ID} with account: ${trimmed}"
+                            sh """
+                            aws ec2 modify-image-attribute \
+                                --image-id ${env.AMI_ID} \
+                                --launch-permission Add=[{UserId=${trimmed}}]
+                            """
+                        }
+                    }
                 }
             }
         }
@@ -65,7 +97,14 @@ pipeline {
 
     post {
         always {
+            archiveArtifacts artifacts: 'packer_build.log, ami_id.txt', onlyIfSuccessful: false
             cleanWs()
+        }
+        success {
+            echo "Golden AMI created successfully! ✅ AMI ID: ${env.AMI_ID}"
+        }
+        failure {
+            echo "Golden AMI build failed ❌ Check logs for details."
         }
     }
 }
