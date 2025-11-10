@@ -7,7 +7,7 @@ pipeline {
         string(name: 'BASE_AMI', defaultValue: 'ami-043cc489b5239c3de', description: 'Base Windows AMI ID')
         string(name: 'SHARE_ACCOUNTS', defaultValue: '284495578504', description: 'Comma-separated AWS Account IDs to share this AMI with')
         string(name: 'S3_BUCKET', defaultValue: 'golden-ami-softwares-nagesh', description: 'S3 bucket containing software installers')
-        file(name: 'INSTALL_SCRIPT', description: 'Upload your PowerShell install script (.ps1)')
+        string(name: 'INSTALL_SCRIPT_NAME', defaultValue: 'install_vscode.ps1', description: 'Script name under packer/scripts/ to run inside AMI build')
     }
 
     environment {
@@ -25,17 +25,15 @@ pipeline {
             steps {
                 cleanWs()
                 script {
-                    echo "📁 Creating required directories..."
+                    echo "📁 Ensuring required directories..."
                     sh 'mkdir -p packer/scripts'
 
-                    echo "📄 Checking uploaded file path..."
-                    echo "Uploaded script path: ${env.INSTALL_SCRIPT ?: 'NOT FOUND'}"
+                    def scriptPath = "packer/scripts/${params.INSTALL_SCRIPT_NAME}"
 
-                    if (fileExists(env.INSTALL_SCRIPT)) {
-                        echo "✅ Found uploaded file: ${env.INSTALL_SCRIPT}"
-                        sh "cp '${env.INSTALL_SCRIPT}' packer/scripts/install_user.ps1"
+                    if (!fileExists(scriptPath)) {
+                        error "❌ Install script not found: ${scriptPath}. Please check the file name or commit it to the repo."
                     } else {
-                        error "❌ Uploaded install script not found! Check Jenkins file upload parameter."
+                        echo "✅ Found install script: ${scriptPath}"
                     }
                 }
             }
@@ -44,9 +42,9 @@ pipeline {
         stage('Validate Install Script') {
             steps {
                 script {
-                    echo "🔍 Validating uploaded install script..."
+                    echo "🔍 Validating selected install script..."
                     sh 'ls -lh packer/scripts/'
-                    sh 'head -n 10 packer/scripts/install_user.ps1 || true'
+                    sh "head -n 10 packer/scripts/${params.INSTALL_SCRIPT_NAME} || true"
                 }
             }
         }
@@ -64,7 +62,7 @@ pipeline {
                               -var 'base_ami=${params.BASE_AMI}' \
                               -var 'aws_account_id=${params.AWS_ACCOUNT_ID}' \
                               -var 's3_software_bucket=${params.S3_BUCKET}' \
-                              -var 'install_script=packer/scripts/install_user.ps1' \
+                              -var 'install_script=packer/scripts/${params.INSTALL_SCRIPT_NAME}' \
                               -machine-readable packer/golden_ami_template.json | tee packer_build.log
                         """
                     }
