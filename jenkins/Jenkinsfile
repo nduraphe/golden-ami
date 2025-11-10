@@ -25,10 +25,14 @@ pipeline {
             steps {
                 cleanWs()
                 script {
-                    echo "Creating required directories..."
+                    echo "📁 Creating required directories..."
                     sh 'mkdir -p packer/scripts'
-                    echo "Saving uploaded install script..."
-                    sh "cp '${params.INSTALL_SCRIPT}' packer/scripts/install_user.ps1"
+
+                    echo "📄 Copying uploaded PowerShell install script..."
+                    // Correct way to access uploaded file
+                    sh 'cp "$INSTALL_SCRIPT" packer/scripts/install_user.ps1'
+
+                    echo "✅ Install script saved to packer/scripts/install_user.ps1"
                 }
             }
         }
@@ -36,8 +40,8 @@ pipeline {
         stage('Validate Install Script') {
             steps {
                 script {
-                    echo "Verifying install script..."
-                    sh 'ls -l packer/scripts/'
+                    echo "🔍 Validating uploaded install script..."
+                    sh 'ls -lh packer/scripts/'
                     sh 'head -n 10 packer/scripts/install_user.ps1 || true'
                 }
             }
@@ -46,7 +50,7 @@ pipeline {
         stage('Build Golden Windows AMI with Packer') {
             steps {
                 script {
-                    echo "Starting Packer build for Windows Golden AMI..."
+                    echo "🚀 Starting Packer build for Windows Golden AMI..."
                     withAWS(credentials: 'd7da5a8a-1ac3-4fe3-b819-9da2b3469db7', region: "${AWS_DEFAULT_REGION}") {
                         sh """
                             packer init packer/golden_ami_template.json
@@ -67,7 +71,7 @@ pipeline {
         stage('Extract AMI ID') {
             steps {
                 script {
-                    echo "Extracting AMI ID from Packer output..."
+                    echo "🧾 Extracting AMI ID from Packer output..."
                     sh "grep 'artifact,0,id' packer_build.log | tail -1 | cut -d, -f6 | cut -d: -f2 > ami_id.txt"
                     env.AMI_ID = readFile('ami_id.txt').trim()
                     echo "✅ AMI created successfully: ${env.AMI_ID}"
@@ -85,7 +89,7 @@ pipeline {
                         def accounts = params.SHARE_ACCOUNTS.split(',')
                         for (acc in accounts) {
                             def trimmed = acc.trim()
-                            echo "Sharing AMI ${env.AMI_ID} with account: ${trimmed}"
+                            echo "🔗 Sharing AMI ${env.AMI_ID} with account: ${trimmed}"
                             sh """
                                 aws ec2 modify-image-attribute \
                                     --image-id ${env.AMI_ID} \
