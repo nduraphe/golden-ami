@@ -18,7 +18,7 @@ source "amazon-ebs" "windows" {
   source_ami              = var.base_ami
   instance_type           = var.instance_type
   iam_instance_profile    = "PackerBuildProfile"
-  ami_name                = "golden-${replace(timestamp(), "[: ]", "-")}"
+  ami_name                = "Golden_AMI_Windows_2025-11-10"
   associate_public_ip_address = true
   communicator            = "winrm"
   winrm_username          = "Administrator"
