@@ -19,7 +19,7 @@ source "amazon-ebs" "windows" {
   source_ami                  = var.base_ami
   instance_type               = var.instance_type
   iam_instance_profile        = "PackerBuildProfile"
-  ami_name                    = "Golden_AMI_Windows_${new Date().format('yyyyMMdd_HHmmss')}".replaceAll("[^a-zA-Z0-9-_]", "_")
+  ami_name                    = "Golden_AMI_Windows"
   associate_public_ip_address = true
   communicator            = "ssm"        
   winrm_timeout               = "20m"
