@@ -53,7 +53,7 @@ pipeline {
                     echo "🚀 Starting Packer build for Windows Golden AMI..."
                     withAWS(credentials: 'd7da5a8a-1ac3-4fe3-b819-9da2b3469db7', region: "${AWS_DEFAULT_REGION}") {
                         sh """
-                            packer init packer/golden_ami_template.json
+                            packer init packer/golden_ami_template.pkr.hcl
                             packer build \
                               -var 'aws_region=${AWS_DEFAULT_REGION}' \
                               -var 'instance_type=${params.INSTANCE_TYPE}' \
@@ -61,7 +61,7 @@ pipeline {
                               -var 'aws_account_id=${params.AWS_ACCOUNT_ID}' \
                               -var 's3_software_bucket=${params.S3_BUCKET}' \
                               -var 'install_script=packer/scripts/${params.INSTALL_SCRIPT_NAME}' \
-                              -machine-readable packer/golden_ami_template.json | tee packer_build.log
+                              -machine-readable packer/golden_ami_template.pkr.hcl | tee packer_build.log
                         """
                     }
                 }
