@@ -32,22 +32,19 @@ pipeline {
         stage('Validate Parameters & Install Script') {
             steps {
                 script {
-                    // Validate BASE_AMI
                     if (!params.BASE_AMI.startsWith('ami-')) {
                         error "❌ Invalid BASE_AMI: ${params.BASE_AMI}"
                     }
 
-                    // Validate INSTANCE_TYPE
                     def validInstanceTypes = ['t3.micro','t3.small','t3.medium','t3.large']
                     if (!validInstanceTypes.contains(params.INSTANCE_TYPE)) {
                         error "❌ Invalid INSTANCE_TYPE: ${params.INSTANCE_TYPE}. Choose from ${validInstanceTypes}"
                     }
 
-                    // Validate install script
                     def scriptPath = "packer/scripts/${params.INSTALL_SCRIPT_NAME}"
                     echo "📁 Checking required install script: ${scriptPath}"
                     if (!fileExists(scriptPath)) {
-                        error "❌ Install script not found: ${scriptPath}. Ensure it is committed to the repo."
+                        error "❌ Install script not found: ${scriptPath}"
                     } else {
                         echo "✅ Found install script: ${scriptPath}"
                         sh "head -n 10 ${scriptPath} || true"
@@ -61,19 +58,19 @@ pipeline {
                 script {
                     echo "🚀 Starting Packer build for Windows Golden AMI..."
                     withAWS(credentials: 'd7da5a8a-1ac3-4fe3-b819-9da2b3469db7', region: "${AWS_DEFAULT_REGION}") {
-                        retry(2) { // Retry Packer build twice if it fails
-                            sh '''
-                                AMI_NAME="Golden_AMI_Windows_$(date +%Y%m%d_%H%M%S)"
+                        retry(2) {
+                            def amiName = "Golden_AMI_Windows_${new Date().format('yyyyMMdd_HHmmss')}"
+                            sh """
                                 packer init packer/golden_ami_template.pkr.hcl
-                                packer build \
-                                  -var 'aws_region=${AWS_DEFAULT_REGION}' \
-                                  -var 'instance_type=${params.INSTANCE_TYPE}' \
-                                  -var 'base_ami=${params.BASE_AMI}' \
-                                  -var 's3_software_bucket=${params.S3_BUCKET}' \
-                                  -var 'install_script=packer/scripts/${params.INSTALL_SCRIPT_NAME}' \
-                                  -var 'ami_name=${AMI_NAME}' \
+                                packer build \\
+                                  -var "aws_region=${AWS_DEFAULT_REGION}" \\
+                                  -var "instance_type=${params.INSTANCE_TYPE}" \\
+                                  -var "base_ami=${params.BASE_AMI}" \\
+                                  -var "s3_software_bucket=${params.S3_BUCKET}" \\
+                                  -var "install_script=packer/scripts/${params.INSTALL_SCRIPT_NAME}" \\
+                                  -var "ami_name=${amiName}" \\
                                   -machine-readable packer/golden_ami_template.pkr.hcl | tee packer_build.log
-                            '''
+                            """
                         }
                     }
                 }
@@ -85,11 +82,9 @@ pipeline {
                 script {
                     echo "🧾 Extracting AMI ID from Packer output..."
                     def amiId = sh(script: "grep 'artifact,0,id' packer_build.log | tail -1 | cut -d, -f6", returnStdout: true).trim()
-
                     if (!amiId) {
                         error "❌ AMI creation failed or AMI ID not found in Packer output."
                     }
-
                     env.AMI_ID = amiId
                     echo "✅ AMI created successfully: ${env.AMI_ID}"
                     writeFile file: 'ami_id.txt', text: env.AMI_ID
@@ -104,16 +99,15 @@ pipeline {
             steps {
                 script {
                     withAWS(credentials: 'd7da5a8a-1ac3-4fe3-b819-9da2b3469db7', region: "${AWS_DEFAULT_REGION}") {
-                        def accounts = params.SHARE_ACCOUNTS.split(',')
-                        for (acc in accounts) {
+                        params.SHARE_ACCOUNTS.split(',').each { acc ->
                             def trimmed = acc.trim()
                             echo "🔗 Sharing AMI ${env.AMI_ID} with account: ${trimmed}"
-                            sh '''
-                                aws ec2 modify-image-attribute \
-                                    --image-id ${env.AMI_ID} \
-                                    --launch-permission "Add=[{UserId=${trimmed}}]" \
-                                    --region ${AWS_DEFAULT_REGION}
-                            '''
+                            sh """
+                                aws ec2 modify-image-attribute \\
+                                  --image-id ${env.AMI_ID} \\
+                                  --launch-permission "Add=[{UserId=${trimmed}}]" \\
+                                  --region ${AWS_DEFAULT_REGION}
+                            """
                         }
                     }
                 }

@@ -19,17 +19,19 @@ source "amazon-ebs" "windows" {
   source_ami                  = var.base_ami
   instance_type               = var.instance_type
   iam_instance_profile        = "PackerBuildProfile"
-  ami_name                    = "Golden_AMI_Windows"
+  ami_name                    = var.ami_name
   associate_public_ip_address = true
-  communicator = "winrm"
-  winrm_username = "Administrator"
-  winrm_use_ssl = true
-  winrm_insecure = true   # only for testing
-  winrm_timeout = "5m"
-  ami_description             = "Golden AMI built via Jenkins + Packer"
+
+  communicator     = "winrm"
+  winrm_username   = "Administrator"
+  winrm_use_ssl    = true
+  winrm_insecure   = true
+  winrm_timeout    = "5m"
+
+  ami_description = "Golden AMI built via Jenkins + Packer"
 
   tags = {
-    Name      = "Golden_AMI_Windows"
+    Name      = var.ami_name
     CreatedBy = "Jenkins"
     BuildDate = "{{timestamp}}"
   }
@@ -39,6 +41,6 @@ build {
   sources = ["source.amazon-ebs.windows"]
 
   provisioner "powershell" {
-    scripts = ["packer/scripts/install_vscode.ps1"]
+    scripts = [var.install_script]
   }
 }
