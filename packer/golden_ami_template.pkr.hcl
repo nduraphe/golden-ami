@@ -24,8 +24,9 @@ source "amazon-ebs" "windows" {
 
   communicator     = "winrm"
   winrm_username   = "Administrator"
-  winrm_use_ssl    = true
+  winrm_use_ssl    = false
   winrm_insecure   = true
+  winrm_port = 5985
   winrm_timeout    = "5m"
 
   ami_description = "Golden AMI built via Jenkins + Packer"
