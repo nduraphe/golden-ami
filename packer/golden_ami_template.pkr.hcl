@@ -21,8 +21,11 @@ source "amazon-ebs" "windows" {
   iam_instance_profile        = "PackerBuildProfile"
   ami_name                    = "Golden_AMI_Windows"
   associate_public_ip_address = true
-  communicator            = "ssm"        
-  winrm_timeout               = "20m"
+  communicator = "winrm"
+  winrm_username = "Administrator"
+  winrm_use_ssl = true
+  winrm_insecure = true   # only for testing
+  winrm_timeout = "5m"
   ami_description             = "Golden AMI built via Jenkins + Packer"
 
   tags = {
