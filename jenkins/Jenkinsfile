@@ -28,11 +28,15 @@ pipeline {
                     echo "📁 Creating required directories..."
                     sh 'mkdir -p packer/scripts'
 
-                    echo "📄 Copying uploaded PowerShell install script..."
-                    // Correct way to access uploaded file
-                    sh 'cp "$INSTALL_SCRIPT" packer/scripts/install_user.ps1'
+                    echo "📄 Checking uploaded file path..."
+                    echo "Uploaded script path: ${env.INSTALL_SCRIPT ?: 'NOT FOUND'}"
 
-                    echo "✅ Install script saved to packer/scripts/install_user.ps1"
+                    if (fileExists(env.INSTALL_SCRIPT)) {
+                        echo "✅ Found uploaded file: ${env.INSTALL_SCRIPT}"
+                        sh "cp '${env.INSTALL_SCRIPT}' packer/scripts/install_user.ps1"
+                    } else {
+                        error "❌ Uploaded install script not found! Check Jenkins file upload parameter."
+                    }
                 }
             }
         }
