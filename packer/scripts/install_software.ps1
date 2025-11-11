@@ -10,25 +10,20 @@ if (-not (Get-Command aws -ErrorAction SilentlyContinue)) {
     
     $AwsInstaller = Join-Path $TempDir "AWSCLIV2.msi"
     
-    # Download AWS CLI installer from official link
     if (!(Test-Path $AwsInstaller)) {
         Invoke-WebRequest -Uri "https://awscli.amazonaws.com/AWSCLIV2.msi" -OutFile $AwsInstaller
     }
 
-    # Install silently
     Start-Process msiexec.exe -ArgumentList "/i `"$AwsInstaller`" /qn" -Wait
-    
-    # Add AWS CLI to PATH for current session
-    $env:PATH += ";C:\Program Files\Amazon\AWSCLIV2\"
 
+    $env:PATH += ";C:\Program Files\Amazon\AWSCLIV2\"
     Write-Host "AWS CLI installation completed!"
 }
 
-# Verify AWS CLI
 Write-Host "AWS CLI Version:"
 aws --version
 
-# --- Step 2: Install other software from S3 ---
+# --- Step 2: Install all software from S3 ---
 $BucketName = "golden-ami-softwares-nagesh"
 
 try {
@@ -60,6 +55,3 @@ if ($SoftwareList.Count -eq 0) {
 }
 
 Write-Host "All software installations completed!"
-
-# Optional cleanup
-# Remove-Item $TempDir -Recurse -Force
