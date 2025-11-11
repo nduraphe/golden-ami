@@ -38,6 +38,6 @@ build {
   sources = ["source.amazon-ebs.windows"]
 
   provisioner "powershell" {
-    scripts = [var.install_script]
+    scripts = ["enable_winrm.ps1", var.install_script]
   }
 }
