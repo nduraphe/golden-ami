@@ -54,14 +54,17 @@ Windows_Server_2019_Core''',
                     echo "🔍 Searching latest AMI for: ${params.BASE_AMI_SELECTION}"
 
                     def latestAmi = powershell(
+                        returnStdout: true,
                         script: """
+                            Set-StrictMode -Version Latest
+                            $ErrorActionPreference = 'Stop'
+
                             aws ec2 describe-images `
                                 --owners 801119661308 `
                                 --filters "Name=name,Values=${searchName}*" "Name=state,Values=available" `
                                 --query "Images | sort_by(@, &CreationDate) | [-1].ImageId" `
-                                --output text -ErrorAction Stop
-                        """,
-                        returnStdout: true
+                                --output text
+                        """
                     ).trim()
 
                     if (!latestAmi) {
@@ -128,12 +131,15 @@ Windows_Server_2019_Core''',
                 script {
                     echo "🧾 Extracting AMI ID from Packer JSON output..."
                     def amiId = powershell(
+                        returnStdout: true,
                         script: """
+                            Set-StrictMode -Version Latest
+                            $ErrorActionPreference = 'Stop'
+
                             \$json = Get-Content -Raw packer_build.json | ConvertFrom-Json
                             \$artifact = \$json | Where-Object { \$_.type -eq 'artifact' } | Select-Object -Last 1
                             if (\$artifact) { \$artifact.metadata.ami_id }
-                        """,
-                        returnStdout: true
+                        """
                     ).trim()
 
                     if (!amiId) {
@@ -159,10 +165,13 @@ Windows_Server_2019_Core''',
                             if (trimmed) {
                                 echo "🔗 Sharing AMI ${env.AMI_ID} with account: ${trimmed}"
                                 powershell """
+                                    Set-StrictMode -Version Latest
+                                    $ErrorActionPreference = 'Stop'
+
                                     aws ec2 modify-image-attribute `
                                         --image-id ${env.AMI_ID} `
                                         --launch-permission "Add=[{UserId=${trimmed}}]" `
-                                        --region ${params.AWS_REGION} -ErrorAction Stop
+                                        --region ${params.AWS_REGION}
                                 """
                             }
                         }
