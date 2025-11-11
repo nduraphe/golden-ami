@@ -36,7 +36,7 @@ pipeline {
                         error "❌ Invalid BASE_AMI: ${params.BASE_AMI}"
                     }
 
-                    def validInstanceTypes = ['t3.micro','t3.small','t3.medium','t3.large']
+                    def validInstanceTypes = ['t3.micro','t3.small','t3.medium','t3.large','m5.large']
                     if (!validInstanceTypes.contains(params.INSTANCE_TYPE)) {
                         error "❌ Invalid INSTANCE_TYPE: ${params.INSTANCE_TYPE}. Choose from ${validInstanceTypes}"
                     }
