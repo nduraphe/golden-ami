@@ -57,7 +57,7 @@ pipeline {
             steps {
                 script {
                     echo "🚀 Starting Packer build for Windows Golden AMI..."
-                    withAWS(credentials: 'd7da5a8a-1ac3-4fe3-b819-9da2b3469db7', region: "${AWS_DEFAULT_REGION}") {
+                    withAWS(credentials: 'AWS_Creds', region: "${AWS_DEFAULT_REGION}") {
                         retry(2) {
                             def amiName = "Golden_AMI_Windows_${new Date().format('yyyyMMdd_HHmmss')}"
                             sh """
