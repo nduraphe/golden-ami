@@ -38,6 +38,11 @@ source "amazon-ebs" "windows" {
     CreatedBy = "Jenkins"
     BuildDate = "{{timestamp}}"
   }
+
+  # ✅ Enforce IMDSv2
+  metadata_options {
+    http_tokens   = "required"  # IMDSv2 required
+    http_endpoint = "enabled"   # Ensure IMDS endpoint is enabled
 }
 
 build {
