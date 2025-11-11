@@ -62,13 +62,14 @@ pipeline {
                             def amiName = "Golden_AMI_Windows_${new Date().format('yyyyMMdd_HHmmss')}"
                             def packerCmd = """
                                 packer build `
-                                    -var 'aws_region=${AWS_DEFAULT_REGION}' `
-                                    -var 'instance_type=${params.INSTANCE_TYPE}' `
-                                    -var 'base_ami=${params.BASE_AMI}' `
-                                    -var 's3_software_bucket=${params.S3_BUCKET}' `
-                                    -var 'install_script=packer/scripts/${params.INSTALL_SCRIPT_NAME}' `
-                                    -var 'ami_name=${amiName}' `
+                                    -var "aws_region=${AWS_DEFAULT_REGION}" `
+                                    -var "instance_type=${params.INSTANCE_TYPE}" `
+                                    -var "base_ami=${params.BASE_AMI}" `
+                                    -var "s3_software_bucket=${params.S3_BUCKET}" `
+                                    -var "install_script=packer/scripts/${params.INSTALL_SCRIPT_NAME}" `
+                                    -var "ami_name=${amiName}" `
                                     -machine-readable `
+                                    packer/golden_ami_template.pkr.hcl `
                                     | Tee-Object -FilePath packer_build.log
                             """
                             powershell packerCmd
