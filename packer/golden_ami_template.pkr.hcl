@@ -43,6 +43,7 @@ source "amazon-ebs" "windows" {
   metadata_options {
     http_tokens   = "required"  # IMDSv2 required
     http_endpoint = "enabled"   # Ensure IMDS endpoint is enabled
+  }
 }
 
 build {
