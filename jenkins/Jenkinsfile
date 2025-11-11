@@ -57,7 +57,7 @@ Windows_Server_2019_Core''',
                         returnStdout: true,
                         script: """
                             Set-StrictMode -Version Latest
-                            $ErrorActionPreference = 'Stop'
+                            \`$ErrorActionPreference = 'Stop'
 
                             aws ec2 describe-images `
                                 --owners 801119661308 `
@@ -116,8 +116,10 @@ Windows_Server_2019_Core''',
                                     -var "s3_software_bucket=${params.S3_BUCKET}" `
                                     -var "install_script=packer/scripts/${params.INSTALL_SCRIPT_NAME}" `
                                     -var "ami_name=${amiName}" `
-                                    -json packer_build.json `
-                                    packer/golden_ami_template.pkr.hcl
+                                    -machine-readable `
+                                    -json `
+                                    packer/golden_ami_template.pkr.hcl `
+                                    | Out-File -FilePath packer_build.json -Encoding utf8
                             """
                             powershell packerCmd
                         }
@@ -134,11 +136,13 @@ Windows_Server_2019_Core''',
                         returnStdout: true,
                         script: """
                             Set-StrictMode -Version Latest
-                            $ErrorActionPreference = 'Stop'
+                            \`$ErrorActionPreference = 'Stop'
 
-                            \$json = Get-Content -Raw packer_build.json | ConvertFrom-Json
-                            \$artifact = \$json | Where-Object { \$_.type -eq 'artifact' } | Select-Object -Last 1
-                            if (\$artifact) { \$artifact.metadata.ami_id }
+                            \$json = Get-Content -Raw -Path 'packer_build.json' | ConvertFrom-Json
+                            \$ami = \$json.builds | Where-Object { \$_.artifact_id -like 'aws*' } | Select-Object -First 1
+                            if (\$ami) {
+                                \$ami.artifact_id.Split(':')[1]
+                            }
                         """
                     ).trim()
 
@@ -166,7 +170,7 @@ Windows_Server_2019_Core''',
                                 echo "🔗 Sharing AMI ${env.AMI_ID} with account: ${trimmed}"
                                 powershell """
                                     Set-StrictMode -Version Latest
-                                    $ErrorActionPreference = 'Stop'
+                                    \`$ErrorActionPreference = 'Stop'
 
                                     aws ec2 modify-image-attribute `
                                         --image-id ${env.AMI_ID} `
