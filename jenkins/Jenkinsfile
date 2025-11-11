@@ -55,16 +55,16 @@ Windows_Server_2019_Core''',
 
                     def latestAmi = powershell(
                         returnStdout: true,
-                        script: """
-                            Set-StrictMode -Version Latest
-                            `$ErrorActionPreference = 'Stop'
+                        script: '''
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
 
-                            aws ec2 describe-images `
-                                --owners 801119661308 `
-                                --filters "Name=name,Values=${searchName}*" "Name=state,Values=available" `
-                                --query "Images | sort_by(@, &CreationDate) | [-1].ImageId" `
-                                --output text
-                        """
+aws ec2 describe-images `
+    --owners 801119661308 `
+    --filters "Name=name,Values=''' + searchName + '''*" "Name=state,Values=available" `
+    --query "Images | sort_by(@, &CreationDate) | [-1].ImageId" `
+    --output text
+                        '''
                     ).trim()
 
                     if (!latestAmi) {
@@ -109,17 +109,16 @@ Windows_Server_2019_Core''',
                         retry(2) {
                             def amiName = "Golden_AMI_Windows_${new Date().format('yyyyMMdd_HHmmss')}"
                             def packerCmd = """
-                                packer build `
-                                    -var "aws_region=${params.AWS_REGION}" `
-                                    -var "instance_type=${params.INSTANCE_TYPE}" `
-                                    -var "base_ami=${env.BASE_AMI}" `
-                                    -var "s3_software_bucket=${params.S3_BUCKET}" `
-                                    -var "install_script=packer/scripts/${params.INSTALL_SCRIPT_NAME}" `
-                                    -var "ami_name=${amiName}" `
-                                    -machine-readable `
-                                    -json `
-                                    packer/golden_ami_template.pkr.hcl `
-                                    | Out-File -FilePath packer_build.json -Encoding utf8
+packer build `
+    -var "aws_region=${params.AWS_REGION}" `
+    -var "instance_type=${params.INSTANCE_TYPE}" `
+    -var "base_ami=${env.BASE_AMI}" `
+    -var "s3_software_bucket=${params.S3_BUCKET}" `
+    -var "install_script=packer/scripts/${params.INSTALL_SCRIPT_NAME}" `
+    -var "ami_name=${amiName}" `
+    -machine-readable `
+    packer/golden_ami_template.pkr.hcl `
+    | Out-File -FilePath packer_build.json -Encoding utf8
                             """
                             powershell packerCmd
                         }
@@ -134,16 +133,14 @@ Windows_Server_2019_Core''',
                     echo "🧾 Extracting AMI ID from Packer JSON output..."
                     def amiId = powershell(
                         returnStdout: true,
-                        script: """
-                            Set-StrictMode -Version Latest
-                            \`$ErrorActionPreference = 'Stop'
+                        script: '''
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
 
-                            \$json = Get-Content -Raw -Path 'packer_build.json' | ConvertFrom-Json
-                            \$ami = \$json.builds | Where-Object { \$_.artifact_id -like 'aws*' } | Select-Object -First 1
-                            if (\$ami) {
-                                \$ami.artifact_id.Split(':')[1]
-                            }
-                        """
+$json = Get-Content -Raw -Path 'packer_build.json' | ConvertFrom-Json
+$ami = $json.builds | Where-Object { $_.artifact_id -like 'aws*' } | Select-Object -First 1
+if ($ami) { $ami.artifact_id.Split(':')[1] }
+                        '''
                     ).trim()
 
                     if (!amiId) {
@@ -169,13 +166,13 @@ Windows_Server_2019_Core''',
                             if (trimmed) {
                                 echo "🔗 Sharing AMI ${env.AMI_ID} with account: ${trimmed}"
                                 powershell """
-                                    Set-StrictMode -Version Latest
-                                    \`$ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
 
-                                    aws ec2 modify-image-attribute `
-                                        --image-id ${env.AMI_ID} `
-                                        --launch-permission "Add=[{UserId=${trimmed}}]" `
-                                        --region ${params.AWS_REGION}
+aws ec2 modify-image-attribute `
+    --image-id ${env.AMI_ID} `
+    --launch-permission "Add=[{UserId=${trimmed}}]" `
+    --region ${params.AWS_REGION}
                                 """
                             }
                         }
