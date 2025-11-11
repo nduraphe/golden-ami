@@ -29,6 +29,7 @@ source "amazon-ebs" "windows" {
   winrm_port       = 5985
   winrm_timeout    = "10m"
 
+  user_data_file = "${path.root}/scripts/userdata_winrm.ps1"
 
   ami_description = "Golden AMI built via Jenkins + Packer"
 
@@ -43,6 +44,6 @@ build {
   sources = ["source.amazon-ebs.windows"]
 
   provisioner "powershell" {
-    scripts = ["${path.root}/scripts/enable_winrm.ps1", var.install_script]
+    scripts = [var.install_script]
   }
 }
