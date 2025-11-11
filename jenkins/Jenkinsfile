@@ -4,14 +4,12 @@ pipeline {
     parameters {
         choice(
             name: 'BASE_AMI_SELECTION',
-            choices: [
-                'Windows_Server_2025_Full',
-                'Windows_Server_2025_Core',
-                'Windows_Server_2022_Full',
-                'Windows_Server_2022_Core',
-                'Windows_Server_2019_Full',
-                'Windows_Server_2019_Core'
-            ].join('\n'),
+            choices: '''Windows_Server_2025_Full
+Windows_Server_2025_Core
+Windows_Server_2022_Full
+Windows_Server_2022_Core
+Windows_Server_2019_Full
+Windows_Server_2019_Core''',
             description: 'Select the base Windows AMI version'
         )
         string(name: 'INSTANCE_TYPE', defaultValue: 't3.micro', description: 'EC2 Instance Type')
@@ -115,7 +113,6 @@ pipeline {
                                     -var "s3_software_bucket=${params.S3_BUCKET}" `
                                     -var "install_script=packer/scripts/${params.INSTALL_SCRIPT_NAME}" `
                                     -var "ami_name=${amiName}" `
-                                    -machine-readable `
                                     -json packer_build.json `
                                     packer/golden_ami_template.pkr.hcl
                             """
@@ -132,7 +129,6 @@ pipeline {
                     echo "🧾 Extracting AMI ID from Packer JSON output..."
                     def amiId = powershell(
                         script: """
-                            # Read the Packer JSON output and extract the last artifact's AMI ID
                             \$json = Get-Content -Raw packer_build.json | ConvertFrom-Json
                             \$artifact = \$json | Where-Object { \$_.type -eq 'artifact' } | Select-Object -Last 1
                             if (\$artifact) { \$artifact.metadata.ami_id }
