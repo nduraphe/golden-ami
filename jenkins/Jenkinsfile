@@ -57,7 +57,7 @@ Windows_Server_2019_Core''',
                         returnStdout: true,
                         script: """
                             Set-StrictMode -Version Latest
-                            \`$ErrorActionPreference = 'Stop'
+                            `$ErrorActionPreference = 'Stop'
 
                             aws ec2 describe-images `
                                 --owners 801119661308 `
