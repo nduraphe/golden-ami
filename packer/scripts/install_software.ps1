@@ -1,49 +1,65 @@
 Write-Host "Starting software installation..."
 
-# Create temp dir
+# Temp directory
 $TempDir = "C:\Temp"
 if (!(Test-Path $TempDir)) { New-Item -ItemType Directory -Force -Path $TempDir }
 
-# Install AWS CLI v2 if not present
+# --- Step 1: Install AWS CLI if not found ---
 if (-not (Get-Command aws -ErrorAction SilentlyContinue)) {
     Write-Host "AWS CLI not found. Installing AWS CLI v2..."
+    
     $AwsInstaller = Join-Path $TempDir "AWSCLIV2.msi"
-    Invoke-WebRequest "https://awscli.amazonaws.com/AWSCLIV2.msi" -OutFile $AwsInstaller
-    Start-Process msiexec.exe -ArgumentList "/i",$AwsInstaller,"/qn" -Wait
+    
+    # Download AWS CLI installer from official link
+    if (!(Test-Path $AwsInstaller)) {
+        Invoke-WebRequest -Uri "https://awscli.amazonaws.com/AWSCLIV2.msi" -OutFile $AwsInstaller
+    }
+
+    # Install silently
+    Start-Process msiexec.exe -ArgumentList "/i `"$AwsInstaller`" /qn" -Wait
+    
+    # Add AWS CLI to PATH for current session
+    $env:PATH += ";C:\Program Files\Amazon\AWSCLIV2\"
+
     Write-Host "AWS CLI installation completed!"
-} else {
-    Write-Host "AWS CLI is already installed."
 }
 
-# Verify AWS CLI version
+# Verify AWS CLI
+Write-Host "AWS CLI Version:"
 aws --version
 
-# S3 bucket containing software installers
+# --- Step 2: Install other software from S3 ---
 $BucketName = "golden-ami-softwares-nagesh"
-Write-Host "Fetching software list from S3 bucket: $BucketName"
 
-# List all .exe and .msi files in the bucket
-$SoftwareList = aws s3 ls "s3://$BucketName/" | ForEach-Object { ($_ -split '\s+')[-1] } | Where-Object { $_ -match '\.exe$|\.msi$' }
+try {
+    $SoftwareList = aws s3 ls "s3://$BucketName/" | ForEach-Object {
+        ($_ -split '\s+')[-1]  # get filename
+    }
+} catch {
+    Write-Warning "Failed to list S3 bucket: $_"
+    $SoftwareList = @()
+}
 
 if ($SoftwareList.Count -eq 0) {
     Write-Host "No software files found in S3 bucket."
 } else {
     foreach ($Software in $SoftwareList) {
-        $InstallerPath = Join-Path $TempDir $Software
+        $LocalPath = Join-Path $TempDir $Software
         Write-Host "Downloading $Software..."
-        aws s3 cp "s3://$BucketName/$Software" $InstallerPath
+        aws s3 cp "s3://$BucketName/$Software" $LocalPath
 
         Write-Host "Installing $Software..."
-        if ($InstallerPath -like "*.msi") {
-            Start-Process msiexec.exe -ArgumentList "/i",$InstallerPath,"/qn" -Wait
+        if ($Software.ToLower().EndsWith(".exe")) {
+            Start-Process -FilePath $LocalPath -ArgumentList "/silent","/mergetasks=!runcode" -Wait
+        } elseif ($Software.ToLower().EndsWith(".msi")) {
+            Start-Process msiexec.exe -ArgumentList "/i `"$LocalPath`" /qn" -Wait
         } else {
-            Start-Process -FilePath $InstallerPath -ArgumentList "/silent","/verysilent","/norestart" -Wait
+            Write-Warning "$Software has unknown extension. Skipping."
         }
-
-        # Optional cleanup
-        # Remove-Item $InstallerPath -Force
-        Write-Host "$Software installation completed!"
     }
 }
 
 Write-Host "All software installations completed!"
+
+# Optional cleanup
+# Remove-Item $TempDir -Recurse -Force
