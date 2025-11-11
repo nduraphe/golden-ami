@@ -22,12 +22,8 @@ source "amazon-ebs" "windows" {
   ami_name                    = var.ami_name
   associate_public_ip_address = true
 
-  communicator     = "winrm"
-  winrm_username   = "Administrator"
-  winrm_use_ssl    = false
-  winrm_insecure   = true
-  winrm_port       = 5985
-  winrm_timeout    = "10m"
+  # ✅ Use SSM communicator instead of WinRM
+  communicator = "ssm"
 
   ami_description = "Golden AMI built via Jenkins + Packer"
 
