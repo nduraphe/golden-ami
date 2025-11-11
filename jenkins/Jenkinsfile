@@ -62,15 +62,15 @@ pipeline {
                             def amiName = "Golden_AMI_Windows_${new Date().format('yyyyMMdd_HHmmss')}"
                             powershell """
                             packer build `
-                                -var "aws_region=us-west-2" `
-                                -var "instance_type=t3.micro" `
-                                -var "base_ami=ami-0222331ecd1b7e353" `
-                                -var "s3_software_bucket=golden-ami-softwares-nagesh" `
-                                -var "install_script=packer\\scripts\\install_vscode.ps1" `
-                                -var "ami_name=Golden_AMI_Windows_20251111_154914" `
-                                -MachineReadable | Tee-Object -FilePath packer_build.log
+                                -var 'aws_region=${AWS_DEFAULT_REGION}' `
+                                -var 'instance_type=${params.INSTANCE_TYPE}' `
+                                -var 'base_ami=${params.BASE_AMI}' `
+                                -var 's3_software_bucket=${params.S3_BUCKET}' `
+                                -var 'install_script=packer\\\\scripts\\\\${params.INSTALL_SCRIPT_NAME}' `
+                                -var 'ami_name=${amiName}' `
+                                -machine-readable `
+                                | Tee-Object -FilePath packer_build.log
                             """
-
                         }
                     }
                 }
@@ -98,7 +98,7 @@ pipeline {
             }
             steps {
                 script {
-                    withAWS(credentials: 'd7da5a8a-1ac3-4fe3-b819-9da2b3469db7', region: "${AWS_DEFAULT_REGION}") {
+                    withAWS(credentials: 'AWS_Creds', region: "${AWS_DEFAULT_REGION}") {
                         params.SHARE_ACCOUNTS.split(',').each { acc ->
                             def trimmed = acc.trim()
                             echo "🔗 Sharing AMI ${env.AMI_ID} with account: ${trimmed}"
