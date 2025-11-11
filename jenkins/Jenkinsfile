@@ -4,22 +4,24 @@ pipeline {
     parameters {
         choice(
             name: 'BASE_AMI_SELECTION',
-            choices: '''Windows_Server_2025_Full
-Windows_Server_2025_Core
-Windows_Server_2022_Full
-Windows_Server_2022_Core
-Windows_Server_2019_Full
-Windows_Server_2019_Core''',
+            choices: [
+                'Windows_Server_2025_Full',
+                'Windows_Server_2025_Core',
+                'Windows_Server_2022_Full',
+                'Windows_Server_2022_Core',
+                'Windows_Server_2019_Full',
+                'Windows_Server_2019_Core'
+            ].join('\n'),
             description: 'Select the base Windows AMI version'
         )
         string(name: 'INSTANCE_TYPE', defaultValue: 't3.micro', description: 'EC2 Instance Type')
-        string(name: 'AWS_REGION', defaultValue: 'us-west-2', description: 'AWS region to use')
         string(name: 'SHARE_ACCOUNTS', defaultValue: '284495578504', description: 'Comma-separated AWS Account IDs to share this AMI with')
         string(name: 'S3_BUCKET', defaultValue: 'golden-ami-softwares-nagesh', description: 'S3 bucket containing software installers')
         string(name: 'INSTALL_SCRIPT_NAME', defaultValue: 'install_software.ps1', description: 'Script name under packer/scripts/ to run inside AMI build')
     }
 
     environment {
+        AWS_DEFAULT_REGION = 'us-west-2'
         PACKER_LOG = '1'
     }
 
@@ -53,18 +55,10 @@ Windows_Server_2019_Core''',
                     def searchName = amiMap[params.BASE_AMI_SELECTION]
                     echo "🔍 Searching latest AMI for: ${params.BASE_AMI_SELECTION}"
 
+                    // Single-line AWS CLI command
                     def latestAmi = powershell(
                         returnStdout: true,
-                        script: '''
-Set-StrictMode -Version Latest
-$ErrorActionPreference = 'Stop'
-
-aws ec2 describe-images `
-    --owners 801119661308 `
-    --filters "Name=name,Values=''' + searchName + '''*" "Name=state,Values=available" `
-    --query "Images | sort_by(@, &CreationDate) | [-1].ImageId" `
-    --output text
-                        '''
+                        script: "aws ec2 describe-images --owners 801119661308 --filters Name=name,Values='${searchName}*' Name=state,Values=available --query \"Images | sort_by(@, &CreationDate) | [-1].ImageId\" --output text"
                     ).trim()
 
                     if (!latestAmi) {
@@ -80,7 +74,7 @@ aws ec2 describe-images `
         stage('Validate Parameters & Install Script') {
             steps {
                 script {
-                    if (!env.BASE_AMI?.startsWith('ami-')) {
+                    if (!env.BASE_AMI.startsWith('ami-')) {
                         error "❌ Invalid BASE_AMI: ${env.BASE_AMI}"
                     }
 
@@ -105,21 +99,10 @@ aws ec2 describe-images `
             steps {
                 script {
                     echo "🚀 Starting Packer build for Windows Golden AMI..."
-                    withAWS(credentials: 'AWS_Creds', region: "${params.AWS_REGION}") {
+                    withAWS(credentials: 'AWS_Creds', region: "${AWS_DEFAULT_REGION}") {
                         retry(2) {
                             def amiName = "Golden_AMI_Windows_${new Date().format('yyyyMMdd_HHmmss')}"
-                            def packerCmd = """
-packer build `
-    -var "aws_region=${params.AWS_REGION}" `
-    -var "instance_type=${params.INSTANCE_TYPE}" `
-    -var "base_ami=${env.BASE_AMI}" `
-    -var "s3_software_bucket=${params.S3_BUCKET}" `
-    -var "install_script=packer/scripts/${params.INSTALL_SCRIPT_NAME}" `
-    -var "ami_name=${amiName}" `
-    -machine-readable `
-    packer/golden_ami_template.pkr.hcl `
-    | Out-File -FilePath packer_build.json -Encoding utf8
-                            """
+                            def packerCmd = "packer build -var \"aws_region=${AWS_DEFAULT_REGION}\" -var \"instance_type=${params.INSTANCE_TYPE}\" -var \"base_ami=${env.BASE_AMI}\" -var \"s3_software_bucket=${params.S3_BUCKET}\" -var \"install_script=packer/scripts/${params.INSTALL_SCRIPT_NAME}\" -var \"ami_name=${amiName}\" -machine-readable packer/golden_ami_template.pkr.hcl | Tee-Object -FilePath packer_build.log"
                             powershell packerCmd
                         }
                     }
@@ -130,21 +113,14 @@ packer build `
         stage('Extract AMI ID') {
             steps {
                 script {
-                    echo "🧾 Extracting AMI ID from Packer JSON output..."
+                    echo "🧾 Extracting AMI ID from Packer output..."
                     def amiId = powershell(
                         returnStdout: true,
-                        script: '''
-Set-StrictMode -Version Latest
-$ErrorActionPreference = 'Stop'
-
-$json = Get-Content -Raw -Path 'packer_build.json' | ConvertFrom-Json
-$ami = $json.builds | Where-Object { $_.artifact_id -like 'aws*' } | Select-Object -First 1
-if ($ami) { $ami.artifact_id.Split(':')[1] }
-                        '''
+                        script: "Select-String -Path 'packer_build.log' -Pattern 'artifact,0,id' | Select-Object -Last 1 | ForEach-Object { \$_ .Line.Split(',')[5] }"
                     ).trim()
 
                     if (!amiId) {
-                        error "❌ AMI creation failed or AMI ID not found in Packer JSON output."
+                        error "❌ AMI creation failed or AMI ID not found in Packer output."
                     }
 
                     env.AMI_ID = amiId
@@ -160,20 +136,12 @@ if ($ami) { $ami.artifact_id.Split(':')[1] }
             }
             steps {
                 script {
-                    withAWS(credentials: 'AWS_Creds', region: "${params.AWS_REGION}") {
+                    withAWS(credentials: 'AWS_Creds', region: "${AWS_DEFAULT_REGION}") {
                         params.SHARE_ACCOUNTS.split(',').each { acc ->
                             def trimmed = acc.trim()
                             if (trimmed) {
                                 echo "🔗 Sharing AMI ${env.AMI_ID} with account: ${trimmed}"
-                                powershell """
-Set-StrictMode -Version Latest
-$ErrorActionPreference = 'Stop'
-
-aws ec2 modify-image-attribute `
-    --image-id ${env.AMI_ID} `
-    --launch-permission "Add=[{UserId=${trimmed}}]" `
-    --region ${params.AWS_REGION}
-                                """
+                                powershell "aws ec2 modify-image-attribute --image-id ${env.AMI_ID} --launch-permission Add=[{UserId=${trimmed}}] --region ${AWS_DEFAULT_REGION}"
                             }
                         }
                     }
@@ -184,14 +152,14 @@ aws ec2 modify-image-attribute `
 
     post {
         always {
-            archiveArtifacts artifacts: 'packer_build.json, ami_id.txt', onlyIfSuccessful: false
+            archiveArtifacts artifacts: 'packer_build.log, ami_id.txt', onlyIfSuccessful: false
             cleanWs()
         }
         success {
             echo "🎉 Golden Windows AMI created successfully! AMI ID: ${env.AMI_ID}"
         }
         failure {
-            echo "❌ Golden AMI build failed. Check packer_build.json for details."
+            echo "❌ Golden AMI build failed. Check packer_build.log for details."
         }
     }
 }
