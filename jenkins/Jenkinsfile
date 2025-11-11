@@ -69,7 +69,7 @@ pipeline {
                                   -var "s3_software_bucket=${params.S3_BUCKET}" ^
                                   -var "install_script=packer\\scripts\\${params.INSTALL_SCRIPT_NAME}" ^
                                   -var "ami_name=${amiName}" ^
-                                  -machine-readable packer\\golden_ami_template.pkr.hcl | tee packer_build.log
+                                  -MachineReadable | Tee-Object -FilePath packer_build.log"
                             """
                         }
                     }
